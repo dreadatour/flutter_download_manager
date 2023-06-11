@@ -10,11 +10,11 @@ import 'package:flutter_download_manager/flutter_download_manager.dart';
 class DownloadManager {
   final Map<String, DownloadTask> _cache = <String, DownloadTask>{};
   final Queue<DownloadRequest> _queue = Queue();
-  var dio = Dio();
+  final dio = Dio();
   static const partialExtension = ".partial";
   static const tempExtension = ".temp";
 
-  // var tasks = StreamController<DownloadTask>();
+  final urls = StreamController<String>();
 
   int maxConcurrentTasks = 2;
   int runningTasks = 0;
@@ -141,7 +141,7 @@ class DownloadManager {
   void setStatus(DownloadTask task, DownloadStatus status) {
     task.status.value = status;
 
-    // tasks.add(task);
+    urls.add(task.request.url);
     if (status.isCompleted) {
       disposeNotifiers(task);
     }
