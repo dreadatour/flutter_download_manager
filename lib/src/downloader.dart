@@ -14,7 +14,8 @@ class DownloadManager {
   static const partialExtension = ".partial";
   static const tempExtension = ".temp";
 
-  final urls = StreamController<String>();
+  final urlsAdded = StreamController<String>();
+  final urlsRemoved = StreamController<String>();
 
   int maxConcurrentTasks = 2;
   int runningTasks = 0;
@@ -141,7 +142,6 @@ class DownloadManager {
   void setStatus(DownloadTask task, DownloadStatus status) {
     task.status.value = status;
 
-    urls.add(task.request.url);
     if (status.isCompleted) {
       disposeNotifiers(task);
     }
@@ -181,6 +181,8 @@ class DownloadManager {
     _cache[downloadRequest.url] = task;
 
     _startExecution();
+
+    urlsAdded.add(downloadRequest.url);
 
     return task;
   }
@@ -231,6 +233,7 @@ class DownloadManager {
   Future<void> removeDownload(String url) async {
     cancelDownload(url);
     _cache.remove(url);
+    urlsRemoved.add(url);
   }
 
   // Do not immediately call getDownload After addDownload, rather use the returned DownloadTask from addDownload
@@ -398,7 +401,5 @@ class DownloadManager {
   }
 
   /// This function is used for get file name with extension from url
-  String getFileNameFromUrl(String url) {
-    return url.split('/').last;
-  }
+  String getFileNameFromUrl(String url) => url.split('/').last;
 }
