@@ -138,30 +138,28 @@ class DownloadManager {
     // task.progress.dispose();
   }
 
-  void setStatus(DownloadTask? task, DownloadStatus status) {
-    if (task != null) {
-      task.status.value = status;
+  void setStatus(DownloadTask task, DownloadStatus status) {
+    task.status.value = status;
 
-      // tasks.add(task);
-      if (status.isCompleted) {
-        disposeNotifiers(task);
-      }
+    // tasks.add(task);
+    if (status.isCompleted) {
+      disposeNotifiers(task);
     }
   }
 
-  Future<DownloadTask?> addDownload(String url, String savedDir) async {
-    if (url.isNotEmpty) {
-      if (savedDir.isEmpty) {
-        savedDir = ".";
-      }
+  Future<DownloadTask> addDownload(String url, String savedDir) async {
+    assert(url.isNotEmpty);
 
-      var isDirectory = await Directory(savedDir).exists();
-      var downloadFilename = isDirectory
-          ? savedDir + Platform.pathSeparator + getFileNameFromUrl(url)
-          : savedDir;
-
-      return _addDownloadRequest(DownloadRequest(url, downloadFilename));
+    if (savedDir.isEmpty) {
+      savedDir = ".";
     }
+
+    var isDirectory = await Directory(savedDir).exists();
+    var downloadFilename = isDirectory
+        ? savedDir + Platform.pathSeparator + getFileNameFromUrl(url)
+        : savedDir;
+
+    return _addDownloadRequest(DownloadRequest(url, downloadFilename));
   }
 
   Future<DownloadTask> _addDownloadRequest(
@@ -242,7 +240,7 @@ class DownloadManager {
 
   Future<DownloadStatus> whenDownloadComplete(String url,
       {Duration timeout = const Duration(hours: 2)}) async {
-    DownloadTask? task = getDownload(url);
+    var task = getDownload(url);
 
     if (task != null) {
       return task.whenDownloadComplete(timeout: timeout);
@@ -299,7 +297,7 @@ class DownloadManager {
     var progressMap = Map<String, double>();
 
     urls.forEach((url) {
-      DownloadTask? task = getDownload(url);
+      var task = getDownload(url);
 
       if (task != null) {
         progressMap[url] = 0.0;
@@ -344,7 +342,7 @@ class DownloadManager {
     var total = urls.length;
 
     urls.forEach((url) {
-      DownloadTask? task = getDownload(url);
+      var task = getDownload(url);
 
       if (task != null) {
         if (task.status.value.isCompleted) {
