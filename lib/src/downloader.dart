@@ -102,7 +102,11 @@ class DownloadManager {
         }
       }
     } catch (e) {
-      var task = getDownload(url)!;
+      var task = getDownload(url);
+      if (task == null) {
+        return;
+      }
+
       if (task.status.value != DownloadStatus.canceled &&
           task.status.value != DownloadStatus.paused) {
         setStatus(task, DownloadStatus.failed);
@@ -187,7 +191,11 @@ class DownloadManager {
     if (kDebugMode) {
       print("Pause Download");
     }
-    var task = getDownload(url)!;
+    var task = getDownload(url);
+    if (task == null) {
+      return;
+    }
+
     setStatus(task, DownloadStatus.paused);
     task.request.cancelToken.cancel();
 
@@ -198,7 +206,10 @@ class DownloadManager {
     if (kDebugMode) {
       print("Cancel Download");
     }
-    var task = getDownload(url)!;
+    var task = getDownload(url);
+    if (task == null) {
+      return;
+    }
     setStatus(task, DownloadStatus.canceled);
     _queue.remove(task.request);
     task.request.cancelToken.cancel();
@@ -208,7 +219,10 @@ class DownloadManager {
     if (kDebugMode) {
       print("Resume Download");
     }
-    var task = getDownload(url)!;
+    var task = getDownload(url);
+    if (task == null) {
+      return;
+    }
     setStatus(task, DownloadStatus.downloading);
     task.request.cancelToken = CancelToken();
     _queue.add(task.request);
