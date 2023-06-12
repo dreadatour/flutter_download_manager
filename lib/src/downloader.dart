@@ -113,9 +113,8 @@ class DownloadManager {
         setStatus(task, DownloadStatus.failed);
         runningTasks--;
 
-        if (_queue.isNotEmpty) {
-          _startExecution();
-        }
+        _startExecution();
+
         rethrow;
       } else if (task.status.value == DownloadStatus.paused) {
         final ioSink = partialFile.openWrite(mode: FileMode.writeOnlyAppend);
@@ -129,9 +128,7 @@ class DownloadManager {
 
     runningTasks--;
 
-    if (_queue.isNotEmpty) {
-      _startExecution();
-    }
+    _startExecution();
   }
 
   void disposeNotifiers(DownloadTask task) {
@@ -223,7 +220,11 @@ class DownloadManager {
     if (task == null) {
       return;
     }
-    setStatus(task, DownloadStatus.downloading);
+    if (runningTasks >= maxConcurrentTasks) {
+      setStatus(task, DownloadStatus.queued);
+    } else {
+      setStatus(task, DownloadStatus.downloading);
+    }
     task.request.cancelToken = CancelToken();
     _queue.add(task.request);
 
@@ -382,7 +383,7 @@ class DownloadManager {
   }
 
   void _startExecution() async {
-    if (runningTasks == maxConcurrentTasks || _queue.isEmpty) {
+    if (runningTasks >= maxConcurrentTasks || _queue.isEmpty) {
       return;
     }
 
@@ -394,7 +395,10 @@ class DownloadManager {
       var currentRequest = _queue.removeFirst();
 
       download(
-          currentRequest.url, currentRequest.path, currentRequest.cancelToken);
+        currentRequest.url,
+        currentRequest.path,
+        currentRequest.cancelToken,
+      );
 
       await Future.delayed(Duration(milliseconds: 500), null);
     }
