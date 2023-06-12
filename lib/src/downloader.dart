@@ -8,8 +8,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_download_manager/flutter_download_manager.dart';
 
 class DownloadManager {
-  final Map<String, DownloadTask> _cache = <String, DownloadTask>{};
-  final Queue<DownloadRequest> _queue = Queue();
+  final _cache = <String, DownloadTask>{};
+  final _queue = Queue<DownloadRequest>();
   final dio = Dio();
   static const partialExtension = ".partial";
   static const tempExtension = ".temp";
@@ -18,7 +18,7 @@ class DownloadManager {
   final urlsRemoved = StreamController<String>();
 
   int maxConcurrentTasks = 2;
-  int runningTasks = 0;
+  final _runningTasks = <String>{};
 
   static final DownloadManager _dm = new DownloadManager._internal();
 
@@ -73,13 +73,16 @@ class DownloadManager {
 
         var partialFileLength = await partialFile.length();
 
-        var response = await dio.download(url, partialFilePath + tempExtension,
-            onReceiveProgress: createCallback(url, partialFileLength),
-            options: Options(
-              headers: {HttpHeaders.rangeHeader: 'bytes=$partialFileLength-'},
-            ),
-            cancelToken: cancelToken,
-            deleteOnError: true);
+        var response = await dio.download(
+          url,
+          partialFilePath + tempExtension,
+          onReceiveProgress: createCallback(url, partialFileLength),
+          options: Options(
+            headers: {HttpHeaders.rangeHeader: 'bytes=$partialFileLength-'},
+          ),
+          cancelToken: cancelToken,
+          deleteOnError: true,
+        );
 
         if (response.statusCode == HttpStatus.partialContent) {
           var ioSink = partialFile.openWrite(mode: FileMode.writeOnlyAppend);
@@ -92,10 +95,13 @@ class DownloadManager {
           setStatus(task, DownloadStatus.completed);
         }
       } else {
-        var response = await dio.download(url, partialFilePath,
-            onReceiveProgress: createCallback(url, 0),
-            cancelToken: cancelToken,
-            deleteOnError: false);
+        var response = await dio.download(
+          url,
+          partialFilePath,
+          onReceiveProgress: createCallback(url, 0),
+          cancelToken: cancelToken,
+          deleteOnError: false,
+        );
 
         if (response.statusCode == HttpStatus.ok) {
           await partialFile.rename(savePath);
@@ -111,7 +117,7 @@ class DownloadManager {
       if (task.status.value != DownloadStatus.canceled &&
           task.status.value != DownloadStatus.paused) {
         setStatus(task, DownloadStatus.failed);
-        runningTasks--;
+        _runningTasks.remove(url);
 
         _startExecution();
 
@@ -126,7 +132,7 @@ class DownloadManager {
       }
     }
 
-    runningTasks--;
+    _runningTasks.remove(url);
 
     _startExecution();
   }
@@ -162,18 +168,18 @@ class DownloadManager {
   Future<DownloadTask> _addDownloadRequest(
     DownloadRequest downloadRequest,
   ) async {
-    if (_cache[downloadRequest.url] != null) {
-      if (!_cache[downloadRequest.url]!.status.value.isCompleted &&
-          _cache[downloadRequest.url]!.request == downloadRequest) {
-        // Do nothing
-        return _cache[downloadRequest.url]!;
-      } else {
-        _queue.remove(_cache[downloadRequest.url]);
+    var task = _cache[downloadRequest.url];
+    if (task != null) {
+      // do nothing if request is the same and download is not completed
+      if (task.request == downloadRequest && !task.status.value.isCompleted) {
+        return task;
       }
+      _removeDownloadRequest(task);
     }
 
-    _queue.add(DownloadRequest(downloadRequest.url, downloadRequest.path));
-    var task = DownloadTask(_queue.last);
+    final request = DownloadRequest(downloadRequest.url, downloadRequest.path);
+    task = DownloadTask(request);
+    _queue.add(request);
 
     _cache[downloadRequest.url] = task;
 
@@ -184,47 +190,51 @@ class DownloadManager {
     return task;
   }
 
+  void _removeDownloadRequest(DownloadTask task) {
+    task.request.cancelToken.cancel();
+    _queue.remove(task);
+    _runningTasks.remove(task.request.url);
+  }
+
   Future<void> pauseDownload(String url) async {
     if (kDebugMode) {
       print("Pause Download");
     }
+
     var task = getDownload(url);
     if (task == null) {
       return;
     }
 
     setStatus(task, DownloadStatus.paused);
-    task.request.cancelToken.cancel();
-
-    _queue.remove(task.request);
+    _removeDownloadRequest(task);
   }
 
   Future<void> cancelDownload(String url) async {
     if (kDebugMode) {
       print("Cancel Download");
     }
+
     var task = getDownload(url);
     if (task == null) {
       return;
     }
+
     setStatus(task, DownloadStatus.canceled);
-    _queue.remove(task.request);
-    task.request.cancelToken.cancel();
+    _removeDownloadRequest(task);
   }
 
   Future<void> resumeDownload(String url) async {
     if (kDebugMode) {
       print("Resume Download");
     }
+
     var task = getDownload(url);
     if (task == null) {
       return;
     }
-    if (runningTasks >= maxConcurrentTasks) {
-      setStatus(task, DownloadStatus.queued);
-    } else {
-      setStatus(task, DownloadStatus.downloading);
-    }
+
+    setStatus(task, DownloadStatus.queued);
     task.request.cancelToken = CancelToken();
     _queue.add(task.request);
 
@@ -383,16 +393,21 @@ class DownloadManager {
   }
 
   void _startExecution() async {
-    if (runningTasks >= maxConcurrentTasks || _queue.isEmpty) {
+    if (_runningTasks.length >= maxConcurrentTasks || _queue.isEmpty) {
       return;
     }
 
-    while (_queue.isNotEmpty && runningTasks < maxConcurrentTasks) {
-      runningTasks++;
-      if (kDebugMode) {
-        print('Concurrent workers: $runningTasks');
-      }
+    while (_queue.isNotEmpty && _runningTasks.length < maxConcurrentTasks) {
       var currentRequest = _queue.removeFirst();
+
+      _runningTasks.add(currentRequest.url);
+      if (kDebugMode) {
+        print('Concurrent workers: ${_runningTasks.length}');
+        print('Active downloads:');
+        for (var url in _runningTasks) {
+          print('- $url');
+        }
+      }
 
       download(
         currentRequest.url,
