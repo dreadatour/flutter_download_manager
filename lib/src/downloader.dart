@@ -7,7 +7,12 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_download_manager/flutter_download_manager.dart';
 
+import 'logger.dart';
+
 class DownloadManager {
+  static DownloadManagerLogLevel logLevel = DownloadManagerLogLevel.none;
+  final _log = DownloadLogger();
+
   final _cache = <String, DownloadTask>{};
   final _queue = Queue<DownloadRequest>();
   final dio = Dio();
@@ -47,13 +52,13 @@ class DownloadManager {
       var task = getDownload(url);
 
       if (task == null || task.status.value == DownloadStatus.canceled) {
+        _log.warning('task not found for url: $url');
         return;
       }
       setStatus(task, DownloadStatus.downloading);
 
-      if (kDebugMode) {
-        print(url);
-      }
+      _log.debug('start download url: $url');
+
       var file = File(savePath.toString());
       partialFilePath = savePath + partialExtension;
       partialFile = File(partialFilePath);
@@ -62,14 +67,10 @@ class DownloadManager {
       var partialFileExist = await partialFile.exists();
 
       if (fileExist) {
-        if (kDebugMode) {
-          print("File Exists");
-        }
+        _log.debug("file exists");
         setStatus(task, DownloadStatus.completed);
       } else if (partialFileExist) {
-        if (kDebugMode) {
-          print("Partial File Exists");
-        }
+        _log.debug("partial file exists");
 
         var partialFileLength = await partialFile.length();
 
@@ -104,18 +105,21 @@ class DownloadManager {
         );
 
         if (response.statusCode == HttpStatus.ok) {
+          _log.debug("download completed successfully");
           await partialFile.rename(savePath);
           setStatus(task, DownloadStatus.completed);
+        } else {
+          _log.debug("download failed: ${response.statusCode}");
+          setStatus(task, DownloadStatus.failed);
         }
       }
     } catch (e) {
       var task = getDownload(url);
       if (task == null) {
-        return;
-      }
-
-      if (task.status.value != DownloadStatus.canceled &&
+        _log.debug("download stopped: task not found (deleted?)");
+      } else if (task.status.value != DownloadStatus.canceled &&
           task.status.value != DownloadStatus.paused) {
+        _log.warning("download failed: $e");
         setStatus(task, DownloadStatus.failed);
         _runningTasks.remove(url);
 
@@ -123,6 +127,7 @@ class DownloadManager {
 
         rethrow;
       } else if (task.status.value == DownloadStatus.paused) {
+        _log.debug("download stopped: task was paused");
         final ioSink = partialFile.openWrite(mode: FileMode.writeOnlyAppend);
         final f = File(partialFilePath + tempExtension);
         if (await f.exists()) {
@@ -133,7 +138,6 @@ class DownloadManager {
     }
 
     _runningTasks.remove(url);
-
     _startExecution();
   }
 
@@ -156,6 +160,8 @@ class DownloadManager {
     if (savedDir.isEmpty) {
       savedDir = ".";
     }
+
+    _log.debug("add download url: $url, savedDir: $savedDir");
 
     var isDirectory = await Directory(savedDir).exists();
     var downloadFilename = isDirectory
@@ -197,9 +203,7 @@ class DownloadManager {
   }
 
   Future<void> pauseDownload(String url) async {
-    if (kDebugMode) {
-      print("Pause Download");
-    }
+    _log.debug("pause download url: $url");
 
     var task = getDownload(url);
     if (task == null) {
@@ -211,9 +215,7 @@ class DownloadManager {
   }
 
   Future<void> cancelDownload(String url) async {
-    if (kDebugMode) {
-      print("Cancel Download");
-    }
+    _log.debug("cancel download url: $url");
 
     var task = getDownload(url);
     if (task == null) {
@@ -225,9 +227,7 @@ class DownloadManager {
   }
 
   Future<void> resumeDownload(String url) async {
-    if (kDebugMode) {
-      print("Resume Download");
-    }
+    print("resume download url: $url");
 
     var task = getDownload(url);
     if (task == null) {
@@ -242,6 +242,8 @@ class DownloadManager {
   }
 
   Future<void> removeDownload(String url) async {
+    print("remove download url: $url");
+
     cancelDownload(url);
     _cache.remove(url);
     urlsRemoved.add(url);
@@ -401,12 +403,11 @@ class DownloadManager {
       var currentRequest = _queue.removeFirst();
 
       _runningTasks.add(currentRequest.url);
-      if (kDebugMode) {
-        print('Concurrent workers: ${_runningTasks.length}');
-        print('Active downloads:');
-        for (var url in _runningTasks) {
-          print('- $url');
-        }
+
+      _log.debug('Concurrent workers: ${_runningTasks.length}');
+      _log.verbose('Active downloads:');
+      for (var url in _runningTasks) {
+        _log.verbose('- $url');
       }
 
       download(

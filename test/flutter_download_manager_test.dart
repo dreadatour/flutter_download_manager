@@ -33,7 +33,7 @@ void main() {
     var dl = DownloadManager();
 
     DownloadTask? task = await dl.addDownload(url2, "./test2.ipa");
-    DownloadTask? task2 = await  dl.addDownload(url3, "./test3.ipa");
+    DownloadTask? task2 = await dl.addDownload(url3, "./test3.ipa");
     DownloadTask? task3 = await dl.addDownload(url, "./test.ipa");
 
     task?.status.addListener(() {
@@ -48,7 +48,8 @@ void main() {
       print(task3.status.value);
     });
 
-    await dl.whenBatchDownloadsComplete([url, url2, url3], timeout: Duration(seconds: 20));
+    await dl.whenBatchDownloadsComplete([url, url2, url3],
+        timeout: Duration(seconds: 20));
   });
 
   test('cancel download', () async {
