@@ -212,7 +212,7 @@ class DownloadManager {
     _runningTasks.remove(task.request.url);
   }
 
-  Future<void> pauseDownload(String url) async {
+  void pauseDownload(String url) {
     _log.debug("pause download url: $url");
 
     var task = getDownload(url);
@@ -224,7 +224,7 @@ class DownloadManager {
     _removeDownloadRequest(task);
   }
 
-  Future<void> cancelDownload(String url) async {
+  void cancelDownload(String url) {
     _log.debug("cancel download url: $url");
 
     var task = getDownload(url);
@@ -236,7 +236,7 @@ class DownloadManager {
     _removeDownloadRequest(task);
   }
 
-  Future<void> resumeDownload(String url) async {
+  void resumeDownload(String url) {
     print("resume download url: $url");
 
     var task = getDownload(url);
@@ -251,7 +251,7 @@ class DownloadManager {
     _startExecution();
   }
 
-  Future<void> removeDownload(String url) async {
+  void removeDownload(String url) {
     print("remove download url: $url");
 
     cancelDownload(url);
@@ -264,45 +264,37 @@ class DownloadManager {
     return _cache[url];
   }
 
-  Future<DownloadStatus> whenDownloadComplete(String url,
-      {Duration timeout = const Duration(hours: 2)}) async {
-    var task = getDownload(url);
+  Future<DownloadStatus> whenDownloadComplete(
+    DownloadTask task, {
+    Duration timeout = const Duration(hours: 2),
+  }) async =>
+      task.whenDownloadComplete(timeout: timeout);
 
-    if (task != null) {
-      return task.whenDownloadComplete(timeout: timeout);
-    } else {
-      return Future.error("Not found");
-    }
-  }
-
-  List<DownloadTask> getAllDownloads() {
-    return _cache.values.toList();
-  }
+  List<DownloadTask> getAllDownloads() => _cache.values.toList();
 
   // Batch Download Mechanism
-  Future<void> addBatchDownloads(List<String> urls, String savedDir) async {
+  void addBatchDownloads(List<String> urls, String savedDir) {
     urls.forEach((url) {
       addDownload(url, savedDir);
     });
   }
 
-  List<DownloadTask?> getBatchDownloads(List<String> urls) {
-    return urls.map((e) => _cache[e]).toList();
-  }
+  List<DownloadTask?> getBatchDownloads(List<String> urls) =>
+      urls.map((e) => _cache[e]).toList();
 
-  Future<void> pauseBatchDownloads(List<String> urls) async {
+  void pauseBatchDownloads(List<String> urls) {
     urls.forEach((element) {
       pauseDownload(element);
     });
   }
 
-  Future<void> cancelBatchDownloads(List<String> urls) async {
+  void cancelBatchDownloads(List<String> urls) {
     urls.forEach((element) {
       cancelDownload(element);
     });
   }
 
-  Future<void> resumeBatchDownloads(List<String> urls) async {
+  void resumeBatchDownloads(List<String> urls) {
     urls.forEach((element) {
       resumeDownload(element);
     });
