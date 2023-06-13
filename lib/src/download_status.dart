@@ -14,6 +14,19 @@ extension DownloadStatusExtension on DownloadStatus {
     }
   }
 
+  bool get isDownloadFinished {
+    switch (this) {
+      case DownloadStatus.completed:
+      case DownloadStatus.failed:
+      case DownloadStatus.canceled:
+      case DownloadStatus.paused:
+        return true;
+      case DownloadStatus.queued:
+      case DownloadStatus.downloading:
+        return false;
+    }
+  }
+
   bool get isInactive {
     switch (this) {
       case DownloadStatus.paused:

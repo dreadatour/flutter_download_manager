@@ -166,7 +166,7 @@ class DownloadManager {
     }
   }
 
-  Future<DownloadTask> addDownload(String url, String savedDir) async {
+  DownloadTask addDownload(String url, String savedDir) {
     assert(url.isNotEmpty);
 
     if (savedDir.isEmpty) {
@@ -175,7 +175,7 @@ class DownloadManager {
 
     _log.debug("add download url: $url, savedDir: $savedDir");
 
-    var isDirectory = await Directory(savedDir).exists();
+    var isDirectory = Directory(savedDir).existsSync();
     var downloadFilename = isDirectory
         ? savedDir + Platform.pathSeparator + getFileNameFromUrl(url)
         : savedDir;
@@ -183,9 +183,7 @@ class DownloadManager {
     return _addDownloadRequest(DownloadRequest(url, downloadFilename));
   }
 
-  Future<DownloadTask> _addDownloadRequest(
-    DownloadRequest downloadRequest,
-  ) async {
+  DownloadTask _addDownloadRequest(DownloadRequest downloadRequest) {
     var task = _cache[downloadRequest.url];
     if (task != null) {
       // do nothing if request is the same and download is not completed
@@ -362,46 +360,38 @@ class DownloadManager {
     return progress;
   }
 
-  Future<List<DownloadTask?>?> whenBatchDownloadsComplete(List<String> urls,
-      {Duration timeout = const Duration(hours: 2)}) async {
-    var completer = Completer<List<DownloadTask?>?>();
+  Future<bool> whenBatchDownloadsComplete(
+    List<DownloadTask> tasks, {
+    Duration timeout = const Duration(hours: 2),
+  }) async {
+    var completer = Completer<bool>();
 
     var completed = 0;
-    var total = urls.length;
+    var total = tasks.length;
 
-    urls.forEach((url) {
-      var task = getDownload(url);
-
-      if (task != null) {
-        if (task.status.value.isCompleted) {
-          completed++;
-
-          if (completed == total) {
-            completer.complete(getBatchDownloads(urls));
-          }
-        }
-
-        var listener;
-        listener = () {
-          if (task.status.value.isCompleted) {
-            completed++;
-
-            if (completed == total) {
-              completer.complete(getBatchDownloads(urls));
-              task.status.removeListener(listener);
-            }
-          }
-        };
-
-        task.status.addListener(listener);
-      } else {
-        total--;
-
-        if (total == 0) {
-          completer.complete(null);
+    for (final task in tasks) {
+      if (task.status.value.isCompleted) {
+        completed++;
+        if (completed >= total) {
+          completer.complete(true);
+          break;
         }
       }
-    });
+
+      var listener;
+      listener = () {
+        if (task.status.value.isDownloadFinished) {
+          task.status.removeListener(listener);
+
+          completed++;
+          if (completed >= total) {
+            completer.complete(true);
+          }
+        }
+      };
+
+      task.status.addListener(listener);
+    }
 
     return completer.future.timeout(timeout);
   }
