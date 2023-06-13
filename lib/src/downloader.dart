@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:collection/collection.dart';
 
 import 'package:dio/dio.dart';
+import 'package:dio_smart_retry/dio_smart_retry.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_download_manager/flutter_download_manager.dart';
 
@@ -27,7 +28,18 @@ class DownloadManager {
 
   static final DownloadManager _dm = new DownloadManager._internal();
 
-  DownloadManager._internal();
+  DownloadManager._internal() {
+    dio.interceptors.add(RetryInterceptor(
+      dio: dio,
+      logPrint: _log.debug,
+      retries: 3, // number of retries before a failure
+      retryDelays: const [
+        Duration(seconds: 1), // wait 1 sec before first retry
+        Duration(seconds: 2), // wait 2 sec before second retry
+        Duration(seconds: 3), // wait 3 sec before third retry
+      ],
+    ));
+  }
 
   factory DownloadManager({int? maxConcurrentTasks}) {
     if (maxConcurrentTasks != null) {
